@@ -3,6 +3,7 @@ import sys
 import traceback
 import types
 import typing
+from functools import partial
 
 from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 from django.db import models, transaction
@@ -577,7 +578,12 @@ class Task(models.Model):
                 )
             task.parent_task_set.add(self)
             if callable(node):
+                countdown = None
+                if hasattr(task.node, 'duration'):
+                    countdown = task.node.duration
+                    countdown = int(countdown.total_seconds() * 1000)
                 transaction.on_commit(task.enqueue)
+                transaction.on_commit(partial(task.enqueue, countdown=countdown))
             tasks.append(task)
         return tasks
 
