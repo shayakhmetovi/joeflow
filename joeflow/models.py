@@ -529,7 +529,7 @@ class Task(models.Model):
 
         Args:
             countdown (int):
-                Time in seconds until the time should be started.
+                Time in milliseconds until the time should be started.
 
             eta (datetime.datetime):
                 Time at which the task should be started.
@@ -582,7 +582,6 @@ class Task(models.Model):
                 if hasattr(task.node, 'duration'):
                     countdown = task.node.duration
                     countdown = int(countdown.total_seconds() * 1000)
-                transaction.on_commit(task.enqueue)
                 transaction.on_commit(partial(task.enqueue, countdown=countdown))
             tasks.append(task)
         return tasks
