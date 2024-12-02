@@ -579,8 +579,11 @@ class Task(models.Model):
             task.parent_task_set.add(self)
             if callable(node):
                 countdown = None
-                if hasattr(task.node, 'duration'):
+                if hasattr(task.node, 'get_duration'):
+                    countdown = task.node.get_duration(task)
+                elif hasattr(task.node, 'duration'):
                     countdown = task.node.duration
+                if countdown:
                     countdown = int(countdown.total_seconds() * 1000)
                 transaction.on_commit(partial(task.enqueue, countdown=countdown))
             tasks.append(task)
