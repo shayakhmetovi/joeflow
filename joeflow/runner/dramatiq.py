@@ -3,11 +3,18 @@ import logging
 import dramatiq
 from django.apps import apps
 from django.db import OperationalError, transaction
+from dramatiq.threading import Interrupt
 
 from ..conf import settings
 from ..contrib.reversion import with_reversion
 
 logger = logging.getLogger(__name__)
+
+
+class CustomTimeLimitExceeded(Interrupt):
+    """Exception used to interrupt worker threads when actors exceed
+    their time limits.
+    """
 
 
 def task_runner(*, task_pk, workflow_pk, countdown=None, eta=None, retries=0):
@@ -51,6 +58,20 @@ def _dramatiq_task_runner(task_pk, workflow_pk, retries=0):
                 result = node(workflow, **kwargs)
         except OperationalError:
             raise
+        except CustomTimeLimitExceeded:
+            error_msg = f"Execution of {task} failed. CustomTimeLimitExceeded"
+            logger.exception(error_msg)
+
+            if hasattr(workflow, 'error'):
+                workflow.error = error_msg
+
+            all_next_nodes = workflow.get_next_nodes(node)
+            for node in all_next_nodes:
+                if node.name in ('call_error',):
+                    task.start_next_tasks(next_nodes=node)
+                    task.finish()
+                    return
+            task.fail()
         except:  # NoQA
             task.fail()
             logger.exception("Execution of %r failed", task)
